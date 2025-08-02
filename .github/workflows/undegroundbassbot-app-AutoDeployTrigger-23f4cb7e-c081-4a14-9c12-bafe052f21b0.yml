@@ -1,0 +1,49 @@
+name: Trigger auto deployment for undegroundbassbot-app
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/undegroundbassbot-app-AutoDeployTrigger-23f4cb7e-c081-4a14-9c12-bafe052f21b0.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:      
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.UNDEGROUNDBASSBOTAPP_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.UNDEGROUNDBASSBOTAPP_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.UNDEGROUNDBASSBOTAPP_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: discordregistry.azurecr.io
+          registryUsername: ${{ secrets.UNDEGROUNDBASSBOTAPP_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.UNDEGROUNDBASSBOTAPP_REGISTRY_PASSWORD }}
+          containerAppName: undegroundbassbot-app
+          resourceGroup: undergroundbassbot
+          imageToBuild: discordregistry.azurecr.io/undegroundbassbot-app:${{ github.sha }}
+          _buildArgumentsKey_: |
+            _buildArgumentsValues_
+
+
