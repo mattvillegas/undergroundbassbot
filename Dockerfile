@@ -14,6 +14,7 @@ RUN git clone https://github.com/Rapptz/discord.py.git
 RUN cd discord.py
 RUN ls
 RUN pip install -e 'discord.py[voice]'
+RUN pip install asyncio
 
 RUN cd /app
 
