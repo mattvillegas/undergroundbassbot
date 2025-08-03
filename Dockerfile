@@ -2,7 +2,7 @@ FROM python:3.13.5-bookworm
 
 WORKDIR /app
 
-RUN apt-get update && apt install ffmpeg=7:7.1.1-1  libffi-dev libnacl-dev python3-dev git -y
+RUN deb http://deb.debian.org/debian bookworm-backports main contrib non-free && apt-get update && apt install ffmpeg/bookworm-backports  libffi-dev libnacl-dev python3-dev git -y
 RUN ffmpeg -h long
 
 # Joining voice is broken in 2.5.x so install from source since
