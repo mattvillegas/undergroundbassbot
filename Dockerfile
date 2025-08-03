@@ -3,6 +3,7 @@ FROM python:3.13-slim
 WORKDIR /app
 
 RUN apt-get update && apt install ffmpeg libffi-dev libnacl-dev python3-dev git -y
+RUN ffmpeg -h full
 
 # Joining voice is broken in 2.5.x so install from source since
 # the fix is in the master branch
