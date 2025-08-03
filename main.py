@@ -1,18 +1,23 @@
 import asyncio
 import os
+import discord
 from discord import FFmpegPCMAudio
 from discord.ext import commands
 from discord import Intents
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-PREFIX = "/"
 
-client = commands.Bot(command_prefix=list(PREFIX), intents=Intents.all())
+# Define the guilds where the commands will be registered
+guilds = [
+    discord.Object(id=1401065347859349586),
+    discord.Object(id=1281381838375489618),
+]
+
+client = commands.Bot(command_prefix="/", intents=Intents.all())
 
 activity_check_task = None
 continue_event = None
-last_play_ctx = None
-last_voice_channel_id = None
+last_interaction: discord.Interaction = None
 restarting_lock = asyncio.Lock()
 
 # 4 hour timer for playing before prompting to continue
@@ -24,31 +29,31 @@ async def restart_playback():
     Reconnects to the last channel it was connected to (if any) and resumes
     playback.
     """
-    global activity_check_task, continue_event, last_play_ctx, last_voice_channel_id
+    global activity_check_task, continue_event, last_interaction
 
     if restarting_lock.locked():
         print("Restart is already in progress.")
         return
 
     async with restarting_lock:
-        if not last_play_ctx or not last_voice_channel_id:
-            print("Cannot restart: No last play context or channel ID available.")
+        if not last_interaction:
+            print("Cannot restart: No last interaction available.")
             return
 
-        ctx = last_play_ctx
-        voice_channel = client.get_channel(last_voice_channel_id)
-
+        voice_channel = last_interaction.user.voice.channel
         if not voice_channel:
-            await ctx.send("Could not find the previous voice channel to reconnect.")
+            await last_interaction.channel.send(
+                "Could not find the previous voice channel to reconnect."
+            )
             return
 
-        await ctx.send(
+        await last_interaction.channel.send(
             f"An error was detected. Attempting to restart and reconnect to {voice_channel.name}..."
         )
 
         try:
-            if ctx.voice_client:
-                await ctx.voice_client.disconnect()
+            if last_interaction.guild.voice_client:
+                await last_interaction.guild.voice_client.disconnect()
 
             await asyncio.sleep(1)
 
@@ -59,19 +64,22 @@ async def restart_playback():
                 activity_check_task.cancel()
 
             continue_event = asyncio.Event()
-            activity_check_task = client.loop.create_task(check_activity(ctx))
+            activity_check_task = client.loop.create_task(
+                check_activity(last_interaction)
+            )
 
-            await ctx.send("Successfully reconnected and restarted playback.")
+            await last_interaction.channel.send(
+                "Successfully reconnected and restarted playback."
+            )
         except Exception as e:
             print(f"Error during restart_playback: {e}")
-            await ctx.send(
+            await last_interaction.channel.send(
                 "Failed to restart playback. Please use the `/play` command manually."
             )
-            last_play_ctx = None
-            last_voice_channel_id = None
+            last_interaction = None
 
 
-async def check_activity(ctx):
+async def check_activity(interaction: discord.Interaction):
     global activity_check_task, continue_event
     try:
         while True:
@@ -79,22 +87,27 @@ async def check_activity(ctx):
                 continue_event.clear()
             await asyncio.sleep(PLAY_DURATION)
 
-            if not ctx.voice_client or not ctx.voice_client.is_playing():
+            if (
+                not interaction.guild.voice_client
+                or not interaction.guild.voice_client.is_playing()
+            ):
                 break
 
-            await ctx.send(
+            await interaction.channel.send(
                 "Are you still listening? Run the `/continue` command within the next 3 minutes to keep the music going."
             )
 
             try:
                 if continue_event:
                     await asyncio.wait_for(continue_event.wait(), timeout=180.0)
-                    await ctx.send("Continuing playback.")
+                    await interaction.channel.send("Continuing playback.")
             except asyncio.TimeoutError:
-                await ctx.send("No response received. Stopping playback.")
-                if ctx.voice_client:
-                    ctx.voice_client.stop()
-                    await ctx.voice_client.disconnect()
+                await interaction.channel.send(
+                    "No response received. Stopping playback."
+                )
+                if interaction.guild.voice_client:
+                    interaction.guild.voice_client.stop()
+                    await interaction.guild.voice_client.disconnect()
                 break
     except asyncio.CancelledError:
         pass
@@ -110,30 +123,39 @@ async def check_activity(ctx):
 async def on_ready():
     print("Connected")
 
+    for guild in guilds:
+        await client.tree.sync(guild=guild)
 
-@client.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        return
 
-    print(f"Caught command error in '{ctx.command}': {error}")
+@client.tree.error
+async def on_app_command_error(
+    interaction: discord.Interaction, error: discord.app_commands.AppCommandError
+):
+    print(f"Caught app command error in '{interaction.command.name}': {error}")
     await restart_playback()
 
 
-@client.command()
-async def play(ctx):
-    global activity_check_task, continue_event, last_play_ctx, last_voice_channel_id
+@client.tree.command(
+    name="play",
+    description="Starts playing the underdground bass audio stream.",
+    guilds=guilds,
+)
+async def play(interaction: discord.Interaction):
+    global activity_check_task, continue_event, last_interaction
 
-    if not ctx.author.voice:
-        await ctx.send("You are not in a voice channel.")
+    if not interaction.user.voice:
+        await interaction.response.send_message("You are not in a voice channel.")
         return
 
-    voice_channel = ctx.author.voice.channel
+    voice_channel = interaction.user.voice.channel
 
-    if ctx.voice_client:
-        await ctx.voice_client.disconnect()
+    if interaction.guild.voice_client:
+        await interaction.guild.voice_client.disconnect()
 
     try:
+        await interaction.response.send_message(
+            f"Connecting to {voice_channel.name}..."
+        )
         voice_client = await voice_channel.connect()
         voice_client.play(FFmpegPCMAudio("http://65.108.124.70:7200/stream"))
 
@@ -141,39 +163,41 @@ async def play(ctx):
             activity_check_task.cancel()
 
         continue_event = asyncio.Event()
-        activity_check_task = client.loop.create_task(check_activity(ctx))
+        activity_check_task = client.loop.create_task(check_activity(interaction))
 
         # Save context for potential restarts
-        last_play_ctx = ctx
-        last_voice_channel_id = voice_channel.id
+        last_interaction = interaction
 
     except Exception as e:
         print(f"Error during initial play command: {e}")
         await restart_playback()
 
 
-@client.command(aliases=["s", "sto"])
-async def stop(ctx):
-    global activity_check_task, last_play_ctx, last_voice_channel_id
+@client.tree.command(
+    name="stop", description="Stops the stream and disconnects.", guilds=guilds
+)
+async def stop(interaction: discord.Interaction):
+    global activity_check_task, last_interaction
     if activity_check_task:
         activity_check_task.cancel()
         activity_check_task = None
 
-    if ctx.voice_client:
-        ctx.voice_client.stop()
-        await ctx.voice_client.disconnect()
+    if interaction.guild.voice_client:
+        interaction.guild.voice_client.stop()
+        await interaction.guild.voice_client.disconnect()
+        await interaction.response.send_message("Playback stopped.")
 
     # Clear context on intentional stop
-    last_play_ctx = None
-    last_voice_channel_id = None
+    last_interaction = None
 
 
-@client.command(name="continue")
-async def continue_(ctx):
-    """Signals the bot to continue playing."""
+@client.tree.command(name="continue", description="Continues playback.", guilds=guilds)
+async def continue_(interaction: discord.Interaction):
+    """Allows users to signal the bot to continue play back rather than auto-timeout"""
     global continue_event
     if continue_event and not continue_event.is_set():
         continue_event.set()
+        await interaction.response.send_message("Continuing playback.")
 
 
 client.run(TOKEN)
