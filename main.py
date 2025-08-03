@@ -19,7 +19,7 @@ activity_check_task = None
 continue_event = None
 last_interaction: discord.Interaction = None
 restarting_lock = asyncio.Lock()
-ffmpeg_options = "-reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 -reconnect_delay_max 10 -reconnect_max_retries 3"
+ffmpeg_options = "-reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 -reconnect_delay_max 10"
 
 # 4 hour timer for playing before prompting to continue
 PLAY_DURATION = 14400
