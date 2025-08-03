@@ -7,7 +7,7 @@ on:
     branches: 
       [ main ]
     paths:
-    - '**'
+    - 'main.py'
     - '.github/workflows/undegroundbassbot-app-AutoDeployTrigger-23f4cb7e-c081-4a14-9c12-bafe052f21b0.yml'
 
   # Allow manual trigger 
