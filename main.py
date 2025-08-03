@@ -147,6 +147,12 @@ async def play(interaction: discord.Interaction):
         await interaction.response.send_message("You are not in a voice channel.")
         return
 
+    if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
+        await interaction.response.send_message(
+            f"I'm already streaming underground bass in {interaction.guild.voice_client.channel}. Use `/stop` if you'd like to move me to a different channel."
+        )
+        return
+
     voice_channel = interaction.user.voice.channel
 
     if interaction.guild.voice_client:
