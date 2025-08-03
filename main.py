@@ -19,6 +19,7 @@ activity_check_task = None
 continue_event = None
 last_interaction: discord.Interaction = None
 restarting_lock = asyncio.Lock()
+ffmpeg_options = '-reconnect 1 -reconnect_streamed 1 -reconnect_on_network_error 1 -reconnect_delay_max 10 -reconnect_max_retries 3'
 
 # 4 hour timer for playing before prompting to continue
 PLAY_DURATION = 14400
@@ -58,7 +59,13 @@ async def restart_playback():
             await asyncio.sleep(1)
 
             voice_client = await voice_channel.connect()
-            voice_client.play(FFmpegPCMAudio("http://65.108.124.70:7200/stream"))
+            print(f'Running ffmpeg with {ffmpeg_options}')
+            voice_client.play(
+            FFmpegPCMAudio(
+                "http://65.108.124.70:7200/stream",
+                before_options=ffmpeg_options,
+            )
+        )
 
             if activity_check_task:
                 activity_check_task.cancel()
@@ -143,8 +150,12 @@ async def play_audio(interaction: discord.Interaction):
             voice_channel = interaction.user.voice.channel
             voice_client = await voice_channel.connect()
 
+        print(f'Running ffmpeg with {ffmpeg_options}')
         voice_client.play(
-            FFmpegPCMAudio("http://65.108.124.70:7200/stream"),
+            FFmpegPCMAudio(
+                "http://65.108.124.70:7200/stream",
+                before_options=ffmpeg_options,
+            ),
             after=lambda e: asyncio.run_coroutine_threadsafe(
                 handle_playback_error(e, interaction), client.loop
             ),
