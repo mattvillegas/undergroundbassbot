@@ -94,7 +94,7 @@ async def check_activity(interaction: discord.Interaction):
                 break
 
             await interaction.channel.send(
-                "Are you still listening? Run the `/continue` command within the next 3 minutes to keep the music going."
+                "Are you still listening? Run the `/continue` command within the next 3 minutes to keep the underground bass stream going."
             )
 
             try:
@@ -184,6 +184,22 @@ async def play(interaction: discord.Interaction):
 )
 async def stop(interaction: discord.Interaction):
     global activity_check_task, last_interaction
+
+    voice_client = interaction.guild.voice_client
+
+    if not voice_client or not voice_client.is_connected():
+        await interaction.response.send_message("I'm not currently in a voice channel.")
+        return
+
+    if (
+        not interaction.user.voice
+        or interaction.user.voice.channel != voice_client.channel
+    ):
+        await interaction.response.send_message(
+            f"I'm currently connected to the {voice_client.channel} channel. You must be connected to that channel to run this command"
+        )
+        return
+
     if activity_check_task:
         activity_check_task.cancel()
         activity_check_task = None
@@ -191,7 +207,7 @@ async def stop(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         interaction.guild.voice_client.stop()
         await interaction.guild.voice_client.disconnect()
-        await interaction.response.send_message("Playback stopped.")
+        await interaction.response.send_message("Stopping the audio stream.")
 
     # Clear context on intentional stop
     last_interaction = None
