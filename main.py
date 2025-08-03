@@ -246,4 +246,14 @@ async def continue_(interaction: discord.Interaction):
         await interaction.response.send_message("Continuing playback.")
 
 
-client.run(TOKEN)
+async def main():
+    while True:
+        try:
+            await client.start(TOKEN)
+        except Exception as e:
+            print(f"Bot crashed with error: {e}. Restarting...")
+            await asyncio.sleep(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
