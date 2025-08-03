@@ -135,6 +135,31 @@ async def on_app_command_error(
     await restart_playback()
 
 
+async def play_audio(interaction: discord.Interaction):
+    """Restarts the audio stream connection if network issues cause the bot to get a broken pipe from the audio stream"""
+    try:
+        voice_client = interaction.guild.voice_client
+        if not voice_client:
+            voice_channel = interaction.user.voice.channel
+            voice_client = await voice_channel.connect()
+
+        voice_client.play(
+            FFmpegPCMAudio("http://65.108.124.70:7200/stream"),
+            after=lambda e: asyncio.run_coroutine_threadsafe(
+                handle_playback_error(e, interaction), client.loop
+            ),
+        )
+    except Exception as e:
+        print(f"Error in play_audio: {e}")
+        await restart_playback()
+
+
+async def handle_playback_error(error, interaction):
+    if error:
+        print(f"Playback error: {error}")
+        await restart_playback()
+
+
 @client.tree.command(
     name="play",
     description="Starts playing the underdground bass audio stream.",
@@ -162,8 +187,7 @@ async def play(interaction: discord.Interaction):
         await interaction.response.send_message(
             f"Connecting to {voice_channel.name}..."
         )
-        voice_client = await voice_channel.connect()
-        voice_client.play(FFmpegPCMAudio("http://65.108.124.70:7200/stream"))
+        await play_audio(interaction)
 
         if activity_check_task:
             activity_check_task.cancel()
