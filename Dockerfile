@@ -17,5 +17,5 @@ RUN uv pip install -e 'discord.py[voice]'
 COPY . .
 RUN uv pip install -r requirements.txt
 
-ENTRYPOINT [ "uv" ]
-CMD ["run", "main.py"]
+ENTRYPOINT [ "bash" ]
+CMD ["run.sh"]
