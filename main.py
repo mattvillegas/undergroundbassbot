@@ -239,13 +239,12 @@ async def stop(interaction: discord.Interaction):
         activity_check_task.cancel()
         activity_check_task = None
 
+    last_interaction = None
+
     if interaction.guild.voice_client:
         interaction.guild.voice_client.stop()
         await interaction.guild.voice_client.disconnect()
         await interaction.response.send_message("Stopping the audio stream.")
-
-    # Clear context on intentional stop
-    last_interaction = None
 
 
 @client.tree.command(name="continue", description="Continues playback.", guilds=guilds)
