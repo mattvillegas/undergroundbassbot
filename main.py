@@ -4,32 +4,6 @@ import discord
 from discord import FFmpegPCMAudio
 from discord.ext import commands
 from discord import Intents
-import logging
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-from opentelemetry.sdk.resources import Resource
-
-def setup_telemetry():
-    service_name = os.getenv("OTEL_SERVICE_NAME", "undergroundbassbot")
-    resource = Resource.create({"service.name": service_name})
-
-    otlp_exporter = OTLPLogExporter()
-
-    logger_provider = LoggerProvider(resource=resource)
-    logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
-
-    handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    logging.getLogger().addHandler(handler)
-
-setup_telemetry()
-log = logging.getLogger(__name__)
-
-
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -59,12 +33,12 @@ async def restart_playback():
     global activity_check_task, continue_event, last_interaction
 
     if restarting_lock.locked():
-        log.warning("Restart is already in progress.")
+        print("Restart is already in progress.")
         return
 
     async with restarting_lock:
         if not last_interaction:
-            log.warning("Cannot restart: No last interaction available.")
+            print("Cannot restart: No last interaction available.")
             return
 
         voice_channel = last_interaction.user.voice.channel
@@ -74,7 +48,6 @@ async def restart_playback():
             )
             return
 
-        log.info(f"An error was detected. Attempting to restart and reconnect to {voice_channel.name}...")
         await last_interaction.channel.send(
             f"An error was detected. Attempting to restart and reconnect to {voice_channel.name}..."
         )
@@ -86,7 +59,7 @@ async def restart_playback():
             await asyncio.sleep(1)
 
             voice_client = await voice_channel.connect()
-            log.info(f"Running ffmpeg with {ffmpeg_options}")
+            print(f"Running ffmpeg with {ffmpeg_options}")
             voice_client.play(
                 FFmpegPCMAudio(
                     "http://65.108.124.70:7200/stream",
@@ -105,9 +78,8 @@ async def restart_playback():
             await last_interaction.channel.send(
                 "Successfully reconnected and restarted playback."
             )
-            log.info("Successfully reconnected and restarted playback.")
         except Exception as e:
-            log.error(f"Error during restart_playback: {e}", extra={"error.message": str(e), "error.type": type(e).__name__})
+            print(f"Error during restart_playback: {e}")
             await last_interaction.channel.send(
                 "Failed to restart playback. Please use the `/play` command manually."
             )
@@ -147,7 +119,7 @@ async def check_activity(interaction: discord.Interaction):
     except asyncio.CancelledError:
         pass
     except Exception as e:
-        log.error(f"Error in check_activity task: {e}", extra={"error.message": str(e), "error.type": type(e).__name__})
+        print(f"Error in check_activity task: {e}")
         await restart_playback()
     finally:
         activity_check_task = None
@@ -156,7 +128,8 @@ async def check_activity(interaction: discord.Interaction):
 
 @client.event
 async def on_ready():
-    log.info("Bot connected and ready.")
+    print("Connected")
+
     for guild in guilds:
         await client.tree.sync(guild=guild)
 
@@ -165,7 +138,7 @@ async def on_ready():
 async def on_app_command_error(
     interaction: discord.Interaction, error: discord.app_commands.AppCommandError
 ):
-    log.error(f"Caught app command error in '{interaction.command.name}': {error}", extra={"command.name": interaction.command.name, "error.message": str(error), "error.type": type(error).__name__})
+    print(f"Caught app command error in '{interaction.command.name}': {error}")
     await restart_playback()
 
 
@@ -177,7 +150,7 @@ async def play_audio(interaction: discord.Interaction):
             voice_channel = interaction.user.voice.channel
             voice_client = await voice_channel.connect()
 
-        log.info(f"Running ffmpeg with {ffmpeg_options}")
+        print(f"Running ffmpeg with {ffmpeg_options}")
         voice_client.play(
             FFmpegPCMAudio(
                 "http://65.108.124.70:7200/stream",
@@ -188,13 +161,13 @@ async def play_audio(interaction: discord.Interaction):
             ),
         )
     except Exception as e:
-        log.error(f"Error in play_audio: {e}", extra={"error.message": str(e), "error.type": type(e).__name__})
+        print(f"Error in play_audio: {e}")
         await restart_playback()
 
 
 async def handle_playback_error(error, interaction):
     if error:
-        log.error(f"Playback error: {error}", extra={"error.message": str(error), "error.type": type(error).__name__})
+        print(f"Playback error: {error}")
         await restart_playback()
 
 
@@ -225,7 +198,6 @@ async def play(interaction: discord.Interaction):
         await interaction.response.send_message(
             f"Connecting to {voice_channel.name}..."
         )
-        log.info(f"Connecting to {voice_channel.name}", extra={"discord.guild.id": interaction.guild.id, "discord.channel.id": voice_channel.id, "discord.channel.name": voice_channel.name})
         await play_audio(interaction)
 
         if activity_check_task:
@@ -238,7 +210,7 @@ async def play(interaction: discord.Interaction):
         last_interaction = interaction
 
     except Exception as e:
-        log.error(f"Error during initial play command: {e}", extra={"error.message": str(e), "error.type": type(e).__name__})
+        print(f"Error during initial play command: {e}")
         await restart_playback()
 
 
@@ -270,7 +242,6 @@ async def stop(interaction: discord.Interaction):
     last_interaction = None
 
     if interaction.guild.voice_client:
-        log.info("Stopping audio stream.", extra={"discord.guild.id": interaction.guild.id, "discord.channel.id": voice_client.channel.id})
         interaction.guild.voice_client.stop()
         await interaction.guild.voice_client.disconnect()
         await interaction.response.send_message("Stopping the audio stream.")
@@ -283,7 +254,6 @@ async def continue_(interaction: discord.Interaction):
     if continue_event and not continue_event.is_set():
         continue_event.set()
         await interaction.response.send_message("Continuing playback.")
-        log.info("Playback continued by user.", extra={"discord.guild.id": interaction.guild.id, "discord.user.id": interaction.user.id})
 
 
 async def main():
@@ -291,7 +261,7 @@ async def main():
         try:
             await client.start(TOKEN)
         except Exception as e:
-            log.critical(f"Bot crashed with error: {e}. Restarting...", extra={"error.message": str(e), "error.type": type(e).__name__})
+            print(f"Bot crashed with error: {e}. Restarting...")
             await asyncio.sleep(1)
 
 
