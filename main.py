@@ -1,9 +1,19 @@
 import asyncio
+import logging
 import os
+from datetime import datetime
+
 import discord
-from discord import FFmpegPCMAudio
+from discord import FFmpegPCMAudio, Intents
 from discord.ext import commands
-from discord import Intents
+
+# Set up logging
+log_filename = datetime.now().strftime("bot_%Y-%m-%d_%H-%M-%S.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(log_filename), logging.StreamHandler()],
+)
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -33,12 +43,12 @@ async def restart_playback():
     global activity_check_task, continue_event, last_interaction
 
     if restarting_lock.locked():
-        print("Restart is already in progress.")
+        logging.info("Restart is already in progress.")
         return
 
     async with restarting_lock:
         if not last_interaction:
-            print("Cannot restart: No last interaction available.")
+            logging.warning("Cannot restart: No last interaction available.")
             return
 
         voice_channel = last_interaction.user.voice.channel
@@ -59,7 +69,7 @@ async def restart_playback():
             await asyncio.sleep(1)
 
             voice_client = await voice_channel.connect()
-            print(f"Running ffmpeg with {ffmpeg_options}")
+            logging.info(f"Running ffmpeg with {ffmpeg_options}")
             voice_client.play(
                 FFmpegPCMAudio(
                     "http://65.108.124.70:7200/stream",
@@ -79,7 +89,7 @@ async def restart_playback():
                 "Successfully reconnected and restarted playback."
             )
         except Exception as e:
-            print(f"Error during restart_playback: {e}")
+            logging.error(f"Error during restart_playback: {e}")
             await last_interaction.channel.send(
                 "Failed to restart playback. Please use the `/play` command manually."
             )
@@ -119,7 +129,7 @@ async def check_activity(interaction: discord.Interaction):
     except asyncio.CancelledError:
         pass
     except Exception as e:
-        print(f"Error in check_activity task: {e}")
+        logging.error(f"Error in check_activity task: {e}")
         await restart_playback()
     finally:
         activity_check_task = None
@@ -128,7 +138,7 @@ async def check_activity(interaction: discord.Interaction):
 
 @client.event
 async def on_ready():
-    print("Connected")
+    logging.info("Connected")
 
     for guild in guilds:
         await client.tree.sync(guild=guild)
@@ -138,7 +148,7 @@ async def on_ready():
 async def on_app_command_error(
     interaction: discord.Interaction, error: discord.app_commands.AppCommandError
 ):
-    print(f"Caught app command error in '{interaction.command.name}': {error}")
+    logging.error(f"Caught app command error in '{interaction.command.name}': {error}")
     await restart_playback()
 
 
@@ -150,7 +160,7 @@ async def play_audio(interaction: discord.Interaction):
             voice_channel = interaction.user.voice.channel
             voice_client = await voice_channel.connect()
 
-        print(f"Running ffmpeg with {ffmpeg_options}")
+        logging.info(f"Running ffmpeg with {ffmpeg_options}")
         voice_client.play(
             FFmpegPCMAudio(
                 "http://65.108.124.70:7200/stream",
@@ -161,13 +171,13 @@ async def play_audio(interaction: discord.Interaction):
             ),
         )
     except Exception as e:
-        print(f"Error in play_audio: {e}")
+        logging.error(f"Error in play_audio: {e}")
         await restart_playback()
 
 
 async def handle_playback_error(error, interaction):
     if error:
-        print(f"Playback error: {error}")
+        logging.error(f"Playback error: {error}")
         await restart_playback()
 
 
@@ -210,7 +220,7 @@ async def play(interaction: discord.Interaction):
         last_interaction = interaction
 
     except Exception as e:
-        print(f"Error during initial play command: {e}")
+        logging.error(f"Error during initial play command: {e}")
         await restart_playback()
 
 
@@ -261,7 +271,7 @@ async def main():
         try:
             await client.start(TOKEN)
         except Exception as e:
-            print(f"Bot crashed with error: {e}. Restarting...")
+            logging.error(f"Bot crashed with error: {e}. Restarting...")
             await asyncio.sleep(1)
 
 
