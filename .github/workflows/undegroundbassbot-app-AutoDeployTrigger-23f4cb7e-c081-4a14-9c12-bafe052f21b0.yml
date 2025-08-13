@@ -57,7 +57,7 @@ jobs:
           inlineScript: |
             az container create \
               --resource-group undergroundbassbot \
-              --name undegroundbassbot-app \
+              --name undegroundbassbot \
               --image discordregistry.azurecr.io/undegroundbassbot-app:${{ github.sha }} \
               --registry-login-server discordregistry.azurecr.io \
               --registry-username ${{ secrets.UNDEGROUNDBASSBOTAPP_REGISTRY_USERNAME }} \
