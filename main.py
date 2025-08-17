@@ -232,7 +232,7 @@ async def stop(interaction: discord.Interaction):
 
     voice_client = interaction.guild.voice_client
 
-    if not voice_client or not voice_client.is_connected():
+    if not voice_client or not voice_client.channel:
         await interaction.response.send_message("I'm not currently in a voice channel.")
         return
 
